@@ -100,7 +100,7 @@ class TodoExtractor {
   // 通过 Vercel serverless proxy 调用（API Key 在服务端）
   async callProxy(text) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     let response;
     try {
