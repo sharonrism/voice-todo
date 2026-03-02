@@ -379,31 +379,6 @@ body {
   opacity: 1;
 }
 
-/* 优先级小按钮 */
-.pri-btn {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: #D0D0D0;
-  transition: all 0.2s;
-}
-
-.pri-btn:hover {
-  transform: scale(1.2);
-}
-
-.pri-btn.p-high.active { color: #C4A3A3; border-color: #C4A3A3; }
-.pri-btn.p-medium.active { color: #9AABBF; border-color: #9AABBF; }
-.pri-btn.p-low.active { color: #B8B8B8; border-color: #B8B8B8; }
-
 /* 编辑/删除 */
 .act-btn {
   width: 20px;
@@ -428,16 +403,83 @@ body {
   color: #C8AAAA;
 }
 
-/* 优先级标签 */
+/* 优先级下拉 */
+.priority-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .task-tag {
   font-size: 10.5px;
   padding: 3px 10px;
   border-radius: 20px;
   font-weight: 500;
   letter-spacing: 0.5px;
-  flex-shrink: 0;
   opacity: 0.8;
+  cursor: pointer;
+  transition: opacity 0.2s;
 }
+
+.task-tag:hover {
+  opacity: 1;
+}
+
+.priority-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255,255,255,0.5);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: all 0.2s ease;
+  z-index: 100;
+  min-width: 90px;
+}
+
+.priority-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.priority-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.priority-option:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+.priority-option.selected {
+  font-weight: 500;
+  color: #4D4D4D;
+}
+
+.pri-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pri-dot.dot-high { background: #C4A3A3; }
+.pri-dot.dot-medium { background: #9AABBF; }
+.pri-dot.dot-low { background: #B8B8B8; }
 
 .task-tag.tag-high {
   color: #C4A3A3;

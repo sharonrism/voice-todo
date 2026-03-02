@@ -234,13 +234,17 @@ class VoiceTodoApp {
           ${todo.dueDate || todo.dueTime ? `<div class="task-time">${this.formatDateTime(todo.dueDate, todo.dueTime)}</div>` : ''}
         </div>
         <div class="task-actions" onclick="event.stopPropagation()">
-          <button class="pri-btn p-high ${todo.priority === 'high' ? 'active' : ''}" onclick="app.setPriority('${todo.id}','high')" title="紧急">!</button>
-          <button class="pri-btn p-medium ${todo.priority === 'medium' ? 'active' : ''}" onclick="app.setPriority('${todo.id}','medium')" title="普通">-</button>
-          <button class="pri-btn p-low ${todo.priority === 'low' ? 'active' : ''}" onclick="app.setPriority('${todo.id}','low')" title="低">↓</button>
           <button class="act-btn" onclick="app.editTodo('${todo.id}')" title="编辑">✎</button>
           <button class="act-btn act-delete" onclick="app.deleteTodo('${todo.id}')" title="删除">×</button>
         </div>
-        <span class="task-tag tag-${todo.priority}">${this.getPriorityTagName(todo.priority)}</span>
+        <div class="priority-dropdown" onclick="event.stopPropagation()">
+          <span class="task-tag tag-${todo.priority}" onclick="app.togglePriorityMenu('${todo.id}')">${this.getPriorityTagName(todo.priority)}</span>
+          <div class="priority-menu" id="pri-menu-${todo.id}">
+            <div class="priority-option ${todo.priority === 'high' ? 'selected' : ''}" onclick="app.setPriority('${todo.id}','high')"><span class="pri-dot dot-high"></span>紧急</div>
+            <div class="priority-option ${todo.priority === 'medium' ? 'selected' : ''}" onclick="app.setPriority('${todo.id}','medium')"><span class="pri-dot dot-medium"></span>普通</div>
+            <div class="priority-option ${todo.priority === 'low' ? 'selected' : ''}" onclick="app.setPriority('${todo.id}','low')"><span class="pri-dot dot-low"></span>低</div>
+          </div>
+        </div>
       </div>
     `).join('');
   }
@@ -627,6 +631,26 @@ class VoiceTodoApp {
   }
 
   // 设置优先级
+  togglePriorityMenu(id) {
+    const menu = document.getElementById(`pri-menu-${id}`);
+    const isOpen = menu.classList.contains('open');
+
+    // 关闭所有已打开的菜单
+    document.querySelectorAll('.priority-menu.open').forEach(m => m.classList.remove('open'));
+
+    if (!isOpen) {
+      menu.classList.add('open');
+      // 点击其他地方关闭
+      const closeHandler = (e) => {
+        if (!menu.contains(e.target)) {
+          menu.classList.remove('open');
+          document.removeEventListener('click', closeHandler, true);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeHandler, true), 0);
+    }
+  }
+
   setPriority(id, priority) {
     const todos = this.storage.getTodos();
     const todo = todos.find(t => t.id === id);
@@ -635,6 +659,8 @@ class VoiceTodoApp {
       this.storage.updateTodo(id, { priority });
       this.renderTodos();
     }
+    // 关闭菜单
+    document.querySelectorAll('.priority-menu.open').forEach(m => m.classList.remove('open'));
   }
 
   // 格式化日期+时间
@@ -660,13 +686,16 @@ class VoiceTodoApp {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    if (targetDate.getTime() === today.getTime()) return '今天';
-    if (targetDate.getTime() === tomorrow.getTime()) return '明天';
-    if (targetDate < today) return '已过期';
-
     const month = parseInt(parts[1]);
     const day = parseInt(parts[2]);
-    return `${month}/${day}`;
+    const specific = `${month}月${day}日`;
+    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+
+    if (targetDate.getTime() === today.getTime()) return `今天 · ${specific}`;
+    if (targetDate.getTime() === tomorrow.getTime()) return `明天 · ${specific}`;
+    if (targetDate < today) return `已过期 · ${specific}`;
+
+    return `周${weekDays[targetDate.getDay()]} · ${specific}`;
   }
 }
 
