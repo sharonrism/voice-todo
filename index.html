@@ -16,10 +16,37 @@
   <div class="ambient-blob blob-2"></div>
   <div class="ambient-blob blob-3"></div>
 
+  <!-- 登录/注册弹窗 -->
+  <div id="auth-overlay" class="auth-overlay" style="display: none;">
+    <div class="auth-card">
+      <h2 class="auth-title" id="auth-title">登录</h2>
+      <p class="auth-subtitle">登录后可跨设备同步待办事项</p>
+      <form id="auth-form" class="auth-form" onsubmit="return false;">
+        <input type="email" id="auth-email" class="auth-input" placeholder="邮箱地址" required autocomplete="email">
+        <input type="password" id="auth-password" class="auth-input" placeholder="密码（至少6位）" required minlength="6" autocomplete="current-password">
+        <div id="auth-error" class="auth-error" style="display: none;"></div>
+        <button type="submit" id="auth-submit" class="auth-btn">登录</button>
+      </form>
+      <div class="auth-switch">
+        <span id="auth-switch-text">还没有账号？</span>
+        <button id="auth-switch-btn" class="auth-link" onclick="app.toggleAuthMode()">注册</button>
+      </div>
+      <div class="auth-divider"><span>或</span></div>
+      <button class="auth-guest-btn" onclick="app.skipLogin()">暂不登录，使用本地模式</button>
+    </div>
+  </div>
+
   <div class="container">
     <!-- 头部：直接文字，不用卡片包裹 -->
     <header class="header">
-      <div class="date-label" id="date-label"></div>
+      <div class="header-top">
+        <div class="date-label" id="date-label"></div>
+        <div id="user-bar" class="user-bar" style="display: none;">
+          <span id="user-email" class="user-email"></span>
+          <button class="user-action-btn" onclick="app.syncNow()" title="同步数据">&#8635;</button>
+          <button class="user-action-btn" onclick="app.logout()" title="退出登录">退出</button>
+        </div>
+      </div>
       <h1 class="header-title">今天想做些什么？</h1>
       <div class="header-stats">
         <span class="stat-text" id="pending-label">0 件待办</span>
@@ -75,12 +102,17 @@
     </div>
 
     <!-- 底部 -->
-    <footer class="footer">一次一件，慢慢来</footer>
+    <footer class="footer">
+      <span>一次一件，慢慢来</span>
+      <button id="login-prompt" class="login-prompt-btn" style="display: none;" onclick="app.showAuthOverlay()">登录以同步数据 &rarr;</button>
+    </footer>
   </div>
 
   <script src="js/storage.js"></script>
   <script src="js/speech.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/cloud-storage.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

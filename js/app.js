@@ -12,6 +12,13 @@ class VoiceTodoApp {
 
     // proxy 模式：通过 Vercel serverless function 调用，Key 在服务端
     this.useProxy = true;
+
+    // 认证与云端同步
+    this.auth = null;
+    this.cloudStorage = null;
+    this.isGuestMode = false;
+    this.isSyncing = false;
+    this.authMode = 'login'; // 'login' | 'register'
   }
 
   async init() {
@@ -20,21 +27,11 @@ class VoiceTodoApp {
     // 初始化存储
     this.storage.init();
 
+    // 初始化认证
+    await this.initAuth();
+
     // 初始化 AI
-    const settings = this.storage.getSettings();
-    let provider = settings.aiProvider;
-    let apiKey = this.storage.getApiKey(provider);
-
-    // 优先使用用户自己的 Key，否则使用 proxy 模式（Key 在 Vercel 服务端）
-    if (!apiKey || provider === 'none') {
-      provider = this.useProxy ? 'proxy' : 'none';
-      apiKey = null;
-    }
-
-    this.todoExtractor = new TodoExtractor(provider, apiKey, settings.polishLevel);
-
-    // 显示模式提示
-    this.showModeHint(provider);
+    this.initAI();
 
     // 初始化语音识别
     try {
@@ -52,6 +49,274 @@ class VoiceTodoApp {
     this.bindEvents();
 
     console.log('应用初始化完成');
+  }
+
+  initAI() {
+    const settings = this.storage.getSettings();
+    let provider = settings.aiProvider;
+    let apiKey = this.storage.getApiKey(provider);
+
+    if (!apiKey || provider === 'none') {
+      provider = this.useProxy ? 'proxy' : 'none';
+      apiKey = null;
+    }
+
+    this.todoExtractor = new TodoExtractor(provider, apiKey, settings.polishLevel);
+    this.showModeHint(provider);
+  }
+
+  // ===== 认证流程 =====
+
+  async initAuth() {
+    this.auth = new AuthManager();
+    this.auth.onAuthStateChange = (event, user) => {
+      this.handleAuthStateChange(event, user);
+    };
+
+    if (this.auth.isLoggedIn) {
+      // 已有 token，尝试从云端同步（同时验证 token 是否有效）
+      this.cloudStorage = new CloudStorage(this.auth);
+      try {
+        await this.syncFromCloud();
+        this.updateUserBar();
+      } catch (e) {
+        // Token 过期或无效
+        console.error('会话已失效:', e);
+        this.auth.signOut();
+        this.cloudStorage = null;
+        this.showLoginPrompt();
+      }
+    } else {
+      const guestChoice = localStorage.getItem('auth-guest-mode');
+      if (guestChoice === 'true') {
+        this.isGuestMode = true;
+        this.showLoginPrompt();
+      } else {
+        this.showAuthOverlay();
+      }
+    }
+  }
+
+  async handleAuthStateChange(event, user) {
+    if (event === 'SIGNED_IN' && user) {
+      this.isGuestMode = false;
+      localStorage.removeItem('auth-guest-mode');
+      this.cloudStorage = new CloudStorage(this.auth);
+      this.hideAuthOverlay();
+      this.updateUserBar();
+
+      await this.migrateLocalToCloud();
+      this.renderTodos();
+      this.showMessage(`欢迎，${user.email}`);
+    } else if (event === 'SIGNED_OUT') {
+      this.cloudStorage = null;
+      this.updateUserBar();
+    }
+  }
+
+  showAuthOverlay() {
+    document.getElementById('auth-overlay').style.display = 'flex';
+    this.authMode = 'login';
+    this.updateAuthUI();
+  }
+
+  hideAuthOverlay() {
+    document.getElementById('auth-overlay').style.display = 'none';
+  }
+
+  toggleAuthMode() {
+    this.authMode = this.authMode === 'login' ? 'register' : 'login';
+    this.updateAuthUI();
+  }
+
+  updateAuthUI() {
+    const title = document.getElementById('auth-title');
+    const submit = document.getElementById('auth-submit');
+    const switchText = document.getElementById('auth-switch-text');
+    const switchBtn = document.getElementById('auth-switch-btn');
+
+    if (this.authMode === 'login') {
+      title.textContent = '登录';
+      submit.textContent = '登录';
+      switchText.textContent = '还没有账号？';
+      switchBtn.textContent = '注册';
+    } else {
+      title.textContent = '注册';
+      submit.textContent = '创建账号';
+      switchText.textContent = '已有账号？';
+      switchBtn.textContent = '登录';
+    }
+    document.getElementById('auth-error').style.display = 'none';
+  }
+
+  async handleAuthSubmit() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errorEl = document.getElementById('auth-error');
+    const submitBtn = document.getElementById('auth-submit');
+
+    if (!email || !password) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = this.authMode === 'login' ? '登录中...' : '注册中...';
+    errorEl.style.display = 'none';
+
+    try {
+      if (this.authMode === 'login') {
+        await this.auth.signIn(email, password);
+      } else {
+        await this.auth.signUp(email, password);
+      }
+    } catch (error) {
+      errorEl.textContent = this.translateAuthError(error.message);
+      errorEl.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = this.authMode === 'login' ? '登录' : '创建账号';
+    }
+  }
+
+  translateAuthError(message) {
+    const errorMap = {
+      'Invalid login credentials': '邮箱或密码不正确',
+      'User already registered': '该邮箱已注册，请直接登录',
+      'Password should be at least 6 characters': '密码至少需要6位',
+      'Unable to validate email address: invalid format': '邮箱格式不正确',
+      'Email rate limit exceeded': '操作过于频繁，请稍后再试',
+      'Signup requires a valid password': '请输入有效密码'
+    };
+    return errorMap[message] || `错误: ${message}`;
+  }
+
+  skipLogin() {
+    this.isGuestMode = true;
+    localStorage.setItem('auth-guest-mode', 'true');
+    this.hideAuthOverlay();
+    this.showLoginPrompt();
+    this.showMessage('本地模式：数据仅保存在当前浏览器');
+  }
+
+  showLoginPrompt() {
+    const el = document.getElementById('login-prompt');
+    if (el) el.style.display = 'inline-block';
+  }
+
+  hideLoginPrompt() {
+    const el = document.getElementById('login-prompt');
+    if (el) el.style.display = 'none';
+  }
+
+  updateUserBar() {
+    const userBar = document.getElementById('user-bar');
+    const emailEl = document.getElementById('user-email');
+    if (this.auth?.isLoggedIn) {
+      userBar.style.display = 'flex';
+      emailEl.textContent = this.auth.userEmail;
+      this.hideLoginPrompt();
+    } else {
+      userBar.style.display = 'none';
+    }
+  }
+
+  logout() {
+    if (!confirm('确定要退出登录吗？\n退出后数据仍保留在本地。')) return;
+    this.auth.signOut();
+    this.cloudStorage = null;
+    this.isGuestMode = true;
+    this.updateUserBar();
+    this.showLoginPrompt();
+    this.showMessage('已退出登录');
+  }
+
+  // ===== 数据同步 =====
+
+  async migrateLocalToCloud() {
+    if (!this.cloudStorage?.isAvailable) return;
+
+    const localTodos = this.storage.getTodos();
+    if (localTodos.length === 0) return;
+
+    try {
+      this.showLoading('正在同步数据...');
+      // 拉取云端数据，合并后保存
+      const cloudTodos = await this.cloudStorage.getTodos();
+      const merged = this.mergeTodos(localTodos, cloudTodos);
+      this.storage.replaceAllTodos(merged);
+      await this.cloudStorage.saveTodos(merged);
+    } catch (error) {
+      console.error('迁移失败:', error);
+      this.showError('数据同步失败');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  async syncFromCloud() {
+    if (!this.cloudStorage?.isAvailable || this.isSyncing) return;
+
+    this.isSyncing = true;
+    try {
+      const cloudTodos = await this.cloudStorage.getTodos();
+      const localTodos = this.storage.getTodos();
+      const merged = this.mergeTodos(localTodos, cloudTodos);
+      this.storage.replaceAllTodos(merged);
+    } catch (error) {
+      console.error('云端同步失败:', error);
+      throw error; // 让调用者知道同步失败
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  mergeTodos(localTodos, cloudTodos) {
+    const merged = new Map();
+
+    // 云端优先
+    for (const todo of cloudTodos) {
+      merged.set(todo.id, todo);
+    }
+
+    // 本地独有的补充进去
+    for (const todo of localTodos) {
+      if (!merged.has(todo.id)) {
+        merged.set(todo.id, todo);
+      }
+    }
+
+    return Array.from(merged.values());
+  }
+
+  async syncNow() {
+    if (!this.cloudStorage?.isAvailable) {
+      this.showError('请先登录');
+      return;
+    }
+
+    try {
+      this.showLoading('正在同步...');
+
+      const localTodos = this.storage.getTodos();
+      const cloudTodos = await this.cloudStorage.getTodos();
+      const merged = this.mergeTodos(localTodos, cloudTodos);
+      this.storage.replaceAllTodos(merged);
+      await this.cloudStorage.saveTodos(merged);
+
+      this.renderTodos();
+      this.showMessage('同步完成');
+    } catch (error) {
+      this.showError('同步失败: ' + error.message);
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  // 全量同步到云端（fire-and-forget）
+  syncToCloud() {
+    if (!this.cloudStorage?.isAvailable) return;
+    const todos = this.storage.getTodos();
+    this.cloudStorage.saveTodos(todos).catch(e =>
+      console.error('云端同步失败:', e)
+    );
   }
 
   // 显示当前模式提示
@@ -148,6 +413,7 @@ class VoiceTodoApp {
         this.storage.addTodo(todo);
       }
 
+      this.syncToCloud();
       this.renderTodos();
 
       const message = result.todos.length === 1
@@ -286,6 +552,7 @@ class VoiceTodoApp {
         completed: !todo.completed,
         completedAt: !todo.completed ? new Date().toISOString() : null
       });
+      this.syncToCloud();
       this.renderTodos();
       this.showMessageWithUndo(todo.completed ? '待办已标记为未完成' : '待办已完成');
     }
@@ -299,6 +566,7 @@ class VoiceTodoApp {
       if (todo) {
         this.pushUndo({ type: 'delete', todo: JSON.parse(JSON.stringify(todo)) });
         this.storage.deleteTodo(id);
+        this.syncToCloud();
         this.renderTodos();
         this.showMessageWithUndo('待办已删除');
       }
@@ -314,6 +582,7 @@ class VoiceTodoApp {
       if (newTitle && newTitle.trim() && newTitle.trim() !== todo.title) {
         this.pushUndo({ type: 'edit', todo: JSON.parse(JSON.stringify(todo)) });
         this.storage.updateTodo(id, { title: newTitle.trim() });
+        this.syncToCloud();
         this.renderTodos();
         this.showMessageWithUndo('待办已更新');
       }
@@ -336,6 +605,15 @@ class VoiceTodoApp {
         this.undo();
       }
     });
+
+    // 登录表单
+    const authForm = document.getElementById('auth-form');
+    if (authForm) {
+      authForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleAuthSubmit();
+      });
+    }
   }
 
   // ===== 设置菜单（重新设计）=====
@@ -564,6 +842,7 @@ class VoiceTodoApp {
     switch (operation.type) {
       case 'delete':
         this.storage.addTodo(operation.todo);
+        this.syncToCloud();
         this.renderTodos();
         this.showMessage('已恢复待办');
         break;
@@ -572,11 +851,13 @@ class VoiceTodoApp {
           completed: operation.todo.completed,
           completedAt: operation.todo.completedAt
         });
+        this.syncToCloud();
         this.renderTodos();
         this.showMessage('已撤销');
         break;
       case 'edit':
         this.storage.updateTodo(operation.todo.id, { title: operation.todo.title });
+        this.syncToCloud();
         this.renderTodos();
         this.showMessage('已恢复原内容');
         break;
@@ -663,6 +944,7 @@ class VoiceTodoApp {
     if (todo && todo.priority !== priority) {
       this.pushUndo({ type: 'edit', todo: JSON.parse(JSON.stringify(todo)) });
       this.storage.updateTodo(id, { priority });
+      this.syncToCloud();
       this.renderTodos();
     }
     // 关闭菜单

@@ -101,6 +101,11 @@ class TodoStorage {
     return this.save(data);
   }
 
+  // 替换所有待办（用于云端同步合并后覆盖本地）
+  replaceAllTodos(todos) {
+    return this.saveTodos(todos);
+  }
+
   // 添加单个待办
   addTodo(todo) {
     const todos = this.getTodos();
