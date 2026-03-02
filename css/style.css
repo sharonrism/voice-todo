@@ -448,6 +448,10 @@ body {
   transform: translateY(0);
 }
 
+.task-card.menu-open {
+  z-index: 50;
+}
+
 .priority-option {
   display: flex;
   align-items: center;

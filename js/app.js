@@ -635,15 +635,21 @@ class VoiceTodoApp {
     const menu = document.getElementById(`pri-menu-${id}`);
     const isOpen = menu.classList.contains('open');
 
-    // 关闭所有已打开的菜单
-    document.querySelectorAll('.priority-menu.open').forEach(m => m.classList.remove('open'));
+    // 关闭所有已打开的菜单，恢复父卡片 z-index
+    document.querySelectorAll('.priority-menu.open').forEach(m => {
+      m.classList.remove('open');
+      m.closest('.task-card')?.classList.remove('menu-open');
+    });
 
     if (!isOpen) {
       menu.classList.add('open');
+      // 提升父卡片的 z-index，防止被下方卡片遮挡
+      menu.closest('.task-card')?.classList.add('menu-open');
       // 点击其他地方关闭
       const closeHandler = (e) => {
         if (!menu.contains(e.target)) {
           menu.classList.remove('open');
+          menu.closest('.task-card')?.classList.remove('menu-open');
           document.removeEventListener('click', closeHandler, true);
         }
       };
@@ -660,7 +666,10 @@ class VoiceTodoApp {
       this.renderTodos();
     }
     // 关闭菜单
-    document.querySelectorAll('.priority-menu.open').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.priority-menu.open').forEach(m => {
+      m.classList.remove('open');
+      m.closest('.task-card')?.classList.remove('menu-open');
+    });
   }
 
   // 格式化日期+时间
