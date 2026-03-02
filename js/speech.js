@@ -24,6 +24,7 @@ class SpeechRecognizer {
     this.recognition.maxAlternatives = 1;         // 只要最佳结果
 
     // 用于累积识别结果
+    this.accumulatedTranscript = ''; // 跨自动重连累积的文本
     this.finalTranscript = '';
     this.interimTranscript = '';
     this.manualStop = false; // 是否手动停止（区分自动断开和用户点击停止）
@@ -58,8 +59,8 @@ class SpeechRecognizer {
         }
       }
 
-      // 组合最终和临时结果
-      const fullTranscript = this.finalTranscript + this.interimTranscript;
+      // 组合累积 + 当前会话的最终 + 临时结果
+      const fullTranscript = this.accumulatedTranscript + this.finalTranscript + this.interimTranscript;
 
       // 基础清理（修正常见识别错误）
       const cleanedTranscript = this.cleanTranscript(fullTranscript);
@@ -102,6 +103,10 @@ class SpeechRecognizer {
       // 如果不是手动停止，说明是浏览器自动断开（说话停顿），自动重连
       if (!this.manualStop && this.isListening) {
         console.log('自动重连语音识别...');
+        // 保存当前会话的 finalTranscript，防止重连后丢失
+        this.accumulatedTranscript += this.finalTranscript;
+        this.finalTranscript = '';
+        this.interimTranscript = '';
         try {
           this.recognition.start();
           return; // 不要重置状态，继续累积
@@ -112,14 +117,19 @@ class SpeechRecognizer {
 
       this.isListening = false;
 
-      // 处理最终结果
-      const finalText = this.cleanTranscript(this.finalTranscript);
+      // 处理最终结果：合并所有累积的文本
+      // 优先用 final，如果 final 为空（用户在 interim 状态就停止了），用 interim 兜底
+      const allFinal = this.accumulatedTranscript + this.finalTranscript;
+      const allText = allFinal || (this.accumulatedTranscript + this.interimTranscript);
+      const finalText = this.cleanTranscript(allText);
+
       if (finalText.trim()) {
         console.log('最终识别结果:', finalText);
         this.onFinalResult(finalText);
       }
 
       // 重置
+      this.accumulatedTranscript = '';
       this.finalTranscript = '';
       this.interimTranscript = '';
       this.manualStop = false;
@@ -133,6 +143,7 @@ class SpeechRecognizer {
     if (!this.isListening) {
       try {
         // 重置累积的文本
+        this.accumulatedTranscript = '';
         this.finalTranscript = '';
         this.interimTranscript = '';
         this.manualStop = false;
@@ -143,6 +154,7 @@ class SpeechRecognizer {
           // 识别器可能还在运行，先停止再启动
           this.recognition.stop();
           setTimeout(() => {
+            this.accumulatedTranscript = '';
             this.finalTranscript = '';
             this.interimTranscript = '';
             this.recognition.start();

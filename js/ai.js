@@ -99,22 +99,37 @@ class TodoExtractor {
   async callGemini(text) {
     const url = this.config.gemini.getUrl(this.apiKey);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `${this.getPrompt()}\n\n请处理以下语音识别文本：\n\n"${text}"`
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json'
-        }
-      })
-    });
+    // 15 秒超时
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `${this.getPrompt()}\n\n请处理以下语音识别文本：\n\n"${text}"`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 8192,
+            responseMimeType: 'application/json'
+          }
+        })
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error('AI 请求超时，请重试');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -137,24 +152,39 @@ class TodoExtractor {
 
   // 调用 Claude API
   async callClaude(text) {
-    const response = await fetch(this.config.claude.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: this.config.claude.model,
-        max_tokens: 1024,
-        temperature: 0.3,
-        system: this.getPrompt(),
-        messages: [{
-          role: 'user',
-          content: `请处理以下语音识别文本：\n\n"${text}"`
-        }]
-      })
-    });
+    // 15 秒超时
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch(this.config.claude.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.config.claude.model,
+          max_tokens: 1024,
+          temperature: 0.3,
+          system: this.getPrompt(),
+          messages: [{
+            role: 'user',
+            content: `请处理以下语音识别文本：\n\n"${text}"`
+          }]
+        })
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error('AI 请求超时，请重试');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
