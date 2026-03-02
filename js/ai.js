@@ -2,7 +2,7 @@
 
 class TodoExtractor {
   constructor(provider = 'none', apiKey = null, polishLevel = 'medium') {
-    this.provider = provider;    // 'none' | 'gemini' | 'claude'
+    this.provider = provider;    // 'none' | 'proxy' | 'gemini' | 'claude'
     this.apiKey = apiKey;
     this.polishLevel = polishLevel;
 
@@ -21,7 +21,7 @@ class TodoExtractor {
 
   // 是否使用 AI 模式
   get useAI() {
-    return this.provider !== 'none' && this.apiKey;
+    return this.provider === 'proxy' || (this.provider !== 'none' && this.apiKey);
   }
 
   // 统一的 Prompt：同时做润色 + 提取待办
@@ -87,12 +87,51 @@ class TodoExtractor {
 
   // ===== 调用 AI API =====
   async callAI(text) {
-    if (this.provider === 'gemini') {
+    if (this.provider === 'proxy') {
+      return this.callProxy(text);
+    } else if (this.provider === 'gemini') {
       return this.callGemini(text);
     } else if (this.provider === 'claude') {
       return this.callClaude(text);
     }
     throw new Error('未知的 AI 提供商');
+  }
+
+  // 通过 Vercel serverless proxy 调用（API Key 在服务端）
+  async callProxy(text) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          prompt: this.getPrompt(),
+          text: text
+        })
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error('AI 请求超时，请重试');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      if (response.status === 429) {
+        throw new Error('API 调用次数超限，请稍后再试');
+      }
+      throw new Error(error.error || 'AI 处理失败');
+    }
+
+    const data = await response.json();
+    return this.parseAIResponse(data.content);
   }
 
   // 调用 Gemini API

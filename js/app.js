@@ -10,8 +10,8 @@ class VoiceTodoApp {
     this.undoStack = [];
     this.maxUndoSteps = 10;
 
-    // 内置默认 Gemini API Key
-    this.defaultGeminiKey = 'AIzaSyBPEj_Yas9yeQFIXUQ3BitXQp1umBbBWpk';
+    // proxy 模式：通过 Vercel serverless function 调用，Key 在服务端
+    this.useProxy = true;
   }
 
   async init() {
@@ -20,15 +20,15 @@ class VoiceTodoApp {
     // 初始化存储
     this.storage.init();
 
-    // 初始化 AI：优先用户手动设置的 Key，否则用内置的 Gemini Key
+    // 初始化 AI
     const settings = this.storage.getSettings();
     let provider = settings.aiProvider;
     let apiKey = this.storage.getApiKey(provider);
 
-    // 如果没有手动设置，使用内置的 Gemini Key
+    // 优先使用用户自己的 Key，否则使用 proxy 模式（Key 在 Vercel 服务端）
     if (!apiKey || provider === 'none') {
-      provider = 'gemini';
-      apiKey = this.defaultGeminiKey;
+      provider = this.useProxy ? 'proxy' : 'none';
+      apiKey = null;
     }
 
     this.todoExtractor = new TodoExtractor(provider, apiKey, settings.polishLevel);
@@ -58,6 +58,7 @@ class VoiceTodoApp {
   showModeHint(provider) {
     const providerNames = {
       'none': '简单模式',
+      'proxy': 'AI 模式',
       'gemini': 'Gemini AI 模式',
       'claude': 'Claude AI 模式'
     };
@@ -124,8 +125,7 @@ class VoiceTodoApp {
 
   // 处理语音识别文本
   async processSpeechText(text) {
-    const settings = this.storage.getSettings();
-    const isAI = settings.aiProvider !== 'none';
+    const isAI = this.todoExtractor.useAI;
     this.showLoading(isAI ? 'AI 正在优化和分析...' : '正在分析待办事项...');
 
     try {

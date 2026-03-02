@@ -137,8 +137,9 @@ class TodoStorage {
   }
 
   // API Key 管理 - 支持多个 AI 提供商
+  // 使用 localStorage 持久化，用户自己的 Key 不需要每次重新输入
   saveApiKey(provider, key) {
-    sessionStorage.setItem(`ai-api-key-${provider}`, key);
+    localStorage.setItem(`ai-api-key-${provider}`, key);
     this.updateSettings({ aiProvider: provider });
   }
 
@@ -147,7 +148,8 @@ class TodoStorage {
       const settings = this.getSettings();
       provider = settings.aiProvider;
     }
-    return sessionStorage.getItem(`ai-api-key-${provider}`);
+    // 兼容旧版 sessionStorage
+    return localStorage.getItem(`ai-api-key-${provider}`) || sessionStorage.getItem(`ai-api-key-${provider}`);
   }
 
   hasApiKey(provider) {
@@ -164,6 +166,7 @@ class TodoStorage {
       const settings = this.getSettings();
       provider = settings.aiProvider;
     }
+    localStorage.removeItem(`ai-api-key-${provider}`);
     sessionStorage.removeItem(`ai-api-key-${provider}`);
     this.updateSettings({ aiProvider: 'none' });
   }
