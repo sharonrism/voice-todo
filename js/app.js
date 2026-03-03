@@ -87,13 +87,9 @@ class VoiceTodoApp {
         this.showLoginPrompt();
       }
     } else {
-      const guestChoice = localStorage.getItem('auth-guest-mode');
-      if (guestChoice === 'true') {
-        this.isGuestMode = true;
-        this.showLoginPrompt();
-      } else {
-        this.showAuthOverlay();
-      }
+      // 未登录：默认进入本地模式，让用户先体验
+      this.isGuestMode = true;
+      this.showLoginPrompt();
     }
   }
 
