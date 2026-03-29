@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="语音转待办事项 - 通过语音快速记录待办，AI 智能提取">
+  <title>语音待办 - Voice Todo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 浮动背景 -->
+  <div class="ambient-blob blob-1"></div>
+  <div class="ambient-blob blob-2"></div>
+  <div class="ambient-blob blob-3"></div>
+
+  <!-- 登录/注册弹窗 -->
+  <div id="auth-overlay" class="auth-overlay" style="display: none;">
+    <div class="auth-card">
+      <h2 class="auth-title" id="auth-title">登录</h2>
+      <p class="auth-subtitle">登录后可跨设备同步待办事项</p>
+      <form id="auth-form" class="auth-form" onsubmit="return false;">
+        <input type="email" id="auth-email" class="auth-input" placeholder="邮箱地址" required autocomplete="email">
+        <input type="password" id="auth-password" class="auth-input" placeholder="密码（至少6位）" required minlength="6" autocomplete="current-password">
+        <div id="auth-error" class="auth-error" style="display: none;"></div>
+        <button type="submit" id="auth-submit" class="auth-btn">登录</button>
+      </form>
+      <div class="auth-switch">
+        <span id="auth-switch-text">还没有账号？</span>
+        <button id="auth-switch-btn" class="auth-link" onclick="app.toggleAuthMode()">注册</button>
+      </div>
+      <div class="auth-divider"><span>或</span></div>
+      <button class="auth-guest-btn" onclick="app.skipLogin()">暂不登录，使用本地模式</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 头部：直接文字，不用卡片包裹 -->
+    <header class="header">
+      <div class="header-top">
+        <div class="date-label" id="date-label"></div>
+        <div id="user-bar" class="user-bar" style="display: none;">
+          <span id="user-email" class="user-email"></span>
+          <button class="user-action-btn" onclick="app.syncNow()" title="同步数据">&#8635;</button>
+          <button class="user-action-btn" onclick="app.logout()" title="退出登录">退出</button>
+        </div>
+        <button id="login-prompt" class="login-prompt-btn" style="display: none;" onclick="app.showAuthOverlay()">登录 &rarr;</button>
+      </div>
+      <h1 class="header-title">今天想做些什么？</h1>
+      <div class="header-stats">
+        <span class="stat-text" id="pending-label">0 件待办</span>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+        <span class="stat-text" id="completed-label">0 已完成</span>
+      </div>
+    </header>
+
+    <!-- 统一输入区 -->
+    <section class="input-card">
+      <div class="input-inner">
+        <!-- 语音模式内容（默认） -->
+        <div id="voice-mode-content" class="voice-text-area">
+          <div id="recording-info" class="recording-info" style="display: none;">
+            <span id="recording-duration">00:00</span>
+            <span class="rec-dot"></span>
+            <span id="word-count">0</span> 字
+          </div>
+          <div id="recognition-text" class="recognition-text">点击麦克风开始说话…</div>
+        </div>
+        <!-- 打字模式内容（隐藏） -->
+        <textarea id="text-input" class="text-input" placeholder="描述你要做的事…" rows="2" style="display:none"></textarea>
+
+        <!-- 右侧按钮区 -->
+        <div class="input-actions-wrapper">
+          <div id="audio-waves" class="audio-waves" style="display: none;">
+            <div class="wave"></div><div class="wave"></div><div class="wave"></div><div class="wave"></div><div class="wave"></div>
+          </div>
+          <button id="voice-btn" class="voice-button" title="点击开始录音，再次点击停止">
+            <svg class="icon-mic" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          </button>
+          <button id="text-submit-btn" class="voice-button" title="AI 优化并添加" style="display:none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </button>
+          <!-- 切换模式 -->
+          <div class="mode-toggle-wrapper">
+            <button id="mode-toggle-btn" class="mode-toggle-btn" title="切换输入方式">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
+            <div id="mode-dropdown" class="mode-dropdown" style="display:none">
+              <div class="mode-option" id="mode-opt-voice" onclick="app.setInputMode('voice')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                麦克风
+              </div>
+              <div class="mode-option" id="mode-opt-text" onclick="app.setInputMode('text')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                打字
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 加载提示 -->
+    <div id="loading" class="loading-area" style="display: none;">
+      <div class="spinner"></div>
+      <span id="loading-text">AI 正在分析...</span>
+    </div>
+
+    <!-- 待办列表 -->
+    <div id="active-todos" class="todo-list"></div>
+
+    <!-- 已完成 -->
+    <div id="completed-wrapper" style="display:none;">
+      <div class="completed-label">已完成</div>
+      <div id="completed-todos" class="todo-list completed-list"></div>
+    </div>
+
+    <!-- 底部 -->
+    <footer class="footer">
+      <span>一次一件，慢慢来</span>
+    </footer>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/speech.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/cloud-storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
