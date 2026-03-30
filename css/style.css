@@ -173,61 +173,45 @@ body {
   color: #C0C0C0;
 }
 
-.mode-toggle-wrapper {
-  position: relative;
+/* Segmented Control */
+.input-mode-switcher {
+  display: flex;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
-.mode-toggle-btn {
-  width: 20px;
-  height: 42px;
+.mode-seg {
+  width: 34px;
+  height: 30px;
   border: none;
+  border-radius: 8px;
   background: transparent;
   color: #C0C8D0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease;
+  transition: all 0.25s ease;
   padding: 0;
 }
 
-.mode-toggle-btn:hover {
+.mode-seg:hover {
   color: #9AABB8;
 }
 
-.mode-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255,255,255,0.6);
-  overflow: hidden;
-  z-index: 100;
-  min-width: 110px;
-}
-
-.mode-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 300;
+.mode-seg.active {
+  background: rgba(255,255,255,0.85);
   color: #6A7A88;
-  cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-.mode-option:hover {
-  background: rgba(170,185,195,0.12);
-}
-
-.mode-option.selected {
-  color: #4A4A4A;
-  font-weight: 400;
+.mode-seg.listening {
+  background: rgba(196,168,130,0.2);
+  color: #C4A882;
+  animation: softPulse 2s ease-in-out infinite;
 }
 
 .voice-button {

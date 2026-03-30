@@ -589,79 +589,61 @@ class VoiceTodoApp {
   // 处理文字输入
   async processTextInput() {
     const input = document.getElementById('text-input');
-    const btn = document.getElementById('text-submit-btn');
+    const segText = document.getElementById('seg-text');
     const text = input.value.trim();
     if (!text) return;
 
     input.value = '';
-    btn.disabled = true;
+    segText.disabled = true;
     await this.processSpeechText(text);
-    btn.disabled = false;
+    segText.disabled = false;
   }
 
   // 切换输入模式
   setInputMode(mode) {
-    this.inputMode = mode;
-    const voiceContent = document.getElementById('voice-mode-content');
-    const textContent = document.getElementById('text-input');
-    const voiceBtn = document.getElementById('voice-btn');
-    const textBtn = document.getElementById('text-submit-btn');
-
-    if (mode === 'voice') {
-      voiceContent.style.display = '';
-      textContent.style.display = 'none';
-      voiceBtn.style.display = '';
-      textBtn.style.display = 'none';
-    } else {
-      voiceContent.style.display = 'none';
-      textContent.style.display = '';
-      voiceBtn.style.display = 'none';
-      textBtn.style.display = '';
-      textContent.focus();
-    }
-
-    // 更新下拉选中状态
-    document.getElementById('mode-opt-voice').classList.toggle('selected', mode === 'voice');
-    document.getElementById('mode-opt-text').classList.toggle('selected', mode === 'text');
-
-    // 关闭下拉
-    document.getElementById('mode-dropdown').style.display = 'none';
-  }
-
-  // 切换下拉菜单
-  toggleModeDropdown() {
-    const dropdown = document.getElementById('mode-dropdown');
-    const isOpen = dropdown.style.display !== 'none';
-    dropdown.style.display = isOpen ? 'none' : '';
-  }
-
-  // 绑定事件
-  bindEvents() {
-    document.getElementById('voice-btn').addEventListener('click', () => {
+    // 如果已经在语音模式，再次点击麦克风 = 开始/停止录音
+    if (mode === 'voice' && this.inputMode === 'voice') {
       if (this.speechRecognizer.isListening) {
         this.speechRecognizer.stop();
       } else {
         this.speechRecognizer.start();
       }
-    });
+      return;
+    }
 
-    document.getElementById('text-submit-btn').addEventListener('click', () => this.processTextInput());
+    // 如果已经在文字模式，再次点击文字 = 提交
+    if (mode === 'text' && this.inputMode === 'text') {
+      this.processTextInput();
+      return;
+    }
+
+    this.inputMode = mode;
+    const voiceContent = document.getElementById('voice-mode-content');
+    const textContent = document.getElementById('text-input');
+
+    if (mode === 'voice') {
+      voiceContent.style.display = '';
+      textContent.style.display = 'none';
+    } else {
+      voiceContent.style.display = 'none';
+      textContent.style.display = '';
+      textContent.focus();
+    }
+
+    // 更新分段控制器选中状态
+    document.getElementById('seg-voice').classList.toggle('active', mode === 'voice');
+    document.getElementById('seg-text').classList.toggle('active', mode === 'text');
+  }
+
+  // 绑定事件
+  bindEvents() {
+    // 文字模式回车提交
 
     document.getElementById('text-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.processTextInput();
       }
-    });
-
-    document.getElementById('mode-toggle-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleModeDropdown();
-    });
-
-    // 点击外部关闭下拉
-    document.addEventListener('click', () => {
-      document.getElementById('mode-dropdown').style.display = 'none';
     });
 
     document.addEventListener('keydown', (e) => {
@@ -838,13 +820,19 @@ class VoiceTodoApp {
   }
 
   updateVoiceButtonState(state) {
-    const btn = document.getElementById('voice-btn');
-    btn.className = `voice-button ${state}`;
+    const segVoice = document.getElementById('seg-voice');
+    if (state === 'listening') {
+      segVoice.classList.add('listening');
+    } else {
+      segVoice.classList.remove('listening');
+    }
 
     // 更新波形显示
     const waves = document.getElementById('audio-waves');
     if (state === 'listening') {
       waves.style.display = 'flex';
+    } else {
+      waves.style.display = 'none';
     }
   }
 
